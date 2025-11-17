@@ -60,7 +60,7 @@ class FinanceAuth:
 
         # get the loggedin user
         self.db.execute(
-            "SELECT password_hash FROM users WHERE email = %s",
+            "SELECT password_hash, name FROM users WHERE email = %s",
             (email,)
         )
 
