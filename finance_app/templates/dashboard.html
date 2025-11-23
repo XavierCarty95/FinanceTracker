@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Dashboard - {{ user.name }}</h2>
+
+<h3>Bank Balance</h3>
+<p>${{ "%.2f"|format(finances.bank_balance) }}</p>
+
+<h3>Loans</h3>
+<p>Total Owed: ${{ "%.2f"|format(total_loans_owed) }}</p>
+<ul>
+{% for l in loans %}
+  <li>{{ l.name }} - ${{ "%.2f"|format(l.amount_owed) }} @ {{ "%.2f"|format(l.interest_rate * 100) }}%</li>
+{% endfor %}
+</ul>
+
+<h3>Monthly Report</h3>
+<p>Monthly Spent: ${{ "%.2f"|format(monthly_spent) }}</p>
+<p>Weekly Spent: ${{ "%.2f"|format(weekly_spent) }}</p>
+
+<h3>Goal Budget Progress</h3>
+<p>Goal Budget: ${{ "%.2f"|format(finances.goal_budget) }}</p>
+<p>Progress: {{ "%.1f"|format(goal_progress) }}%</p>
+<div style="width:300px; border:1px solid #000;">
+  <div style="width:{{ goal_progress }}%; background-color:green; height:20px;"></div>
+</div>
+
+<h3>Investments</h3>
+<p>Total Investments: ${{ "%.2f"|format(total_investments) }}</p>
+<ul>
+{% for i in investments %}
+  <li>{{ i.name }} - ${{ "%.2f"|format(i.amount) }} ({{ i.risk_level }})</li>
+{% endfor %}
+</ul>
+
+<p><a href="{{ url_for('dashboard.edit') }}">Edit Salary / Goal Budget</a></p>
+{% endblock %}

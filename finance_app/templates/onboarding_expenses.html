@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Onboarding - Expenses</h2>
+<p>Basic Needs: Rent, Groceries, Transportation, Clothes</p>
+<p>Luxury: Eating Out, Gym, Vacation, etc.</p>
+
+<form method="post">
+  <label>Name: <input type="text" name="name"></label>
+  <label>Category:
+    <select name="category">
+      <option value="basic">Basic</option>
+      <option value="luxury">Luxury</option>
+    </select>
+  </label>
+  <label>Cost: <input type="number" step="0.01" name="cost"></label>
+  <button type="submit">Add Expense</button>
+</form>
+
+<h3>Current Expenses</h3>
+<ul>
+{% for e in expenses %}
+  <li>{{ e.name }} ({{ e.category.value }}) - {{ e.cost }}</li>
+{% endfor %}
+</ul>
+
+<a href="{{ url_for('onboarding.debts') }}">Next: Debts</a>
+{% endblock %}

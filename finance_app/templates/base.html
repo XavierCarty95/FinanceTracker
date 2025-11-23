@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Finance Tracker</title>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('dashboard.home') }}">Home</a> |
+    <a href="{{ url_for('dashboard.edit') }}">Edit Profile</a> |
+    <a href="{{ url_for('onboarding.new_account') }}">New Account</a>
+  </nav>
+  <hr>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul>
+        {% for category, msg in messages %}
+          <li><strong>{{ category }}:</strong> {{ msg }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</body>
+</html>
