@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from sqlalchemy import select
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 from finance_app.database import SessionLocal
 from finance_app.models import (
     User,
@@ -22,27 +22,130 @@ class FinanceTrackerGUI(tk.Tk):
 
         self.current_user_id = None
         self.current_finances_id = None
+        self._main_view_shown = False
 
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True)
+        # --------- TOP BAR (for Logout when logged in) -------------- #
+        self.top_bar = ttk.Frame(self)
+        self.logout_button = ttk.Button(self.top_bar, text="Logout", command=self.logout)
+        self.logout_button.pack(side="right", padx=10, pady=10)
 
-        self.frame_account = ttk.Frame(notebook)
-        self.frame_expenses = ttk.Frame(notebook)
-        self.frame_debts = ttk.Frame(notebook)
-        self.frame_investments = ttk.Frame(notebook)
+        # --------- AUTH SCREENS (first show login) ----- #
+        self.login_frame = ttk.Frame(self)
+        self.account_frame = ttk.Frame(self)
 
-        notebook.add(self.frame_account, text="Account")
-        notebook.add(self.frame_expenses, text="Expenses")
-        notebook.add(self.frame_debts, text="Debts")
-        notebook.add(self.frame_investments, text="Investments")
+        # Start on login page
+        self.login_frame.pack(fill="both", expand=True)
 
+        # --------- MAIN NOTEBOOK (hidden at start) ----- #
+        self.notebook = ttk.Notebook(self)
+
+        self.frame_expenses = ttk.Frame(self.notebook)
+        self.frame_debts = ttk.Frame(self.notebook)
+        self.frame_investments = ttk.Frame(self.notebook)
+
+        self.notebook.add(self.frame_expenses, text="Expenses")
+        self.notebook.add(self.frame_debts, text="Debts")
+        self.notebook.add(self.frame_investments, text="Investments")
+
+        # Build UI
+        self._build_login_page()
         self._build_account_tab()
         self._build_expenses_tab()
         self._build_debts_tab()
         self._build_investments_tab()
 
+
+    def _build_login_page(self):
+        frame = self.login_frame
+
+        row = 0
+        ttk.Label(frame, text="Login", font=("TkDefaultFont", 14, "bold")).grid(
+            row=row, column=0, columnspan=2, pady=(20, 10)
+        )
+
+        row += 1
+        ttk.Label(frame, text="Email:").grid(row=row, column=0, sticky="e", padx=5, pady=5)
+        self.login_email_entry = ttk.Entry(frame, width=30)
+        self.login_email_entry.grid(row=row, column=1, padx=5, pady=5, sticky="w")
+
+        row += 1
+        ttk.Label(frame, text="Password:").grid(row=row, column=0, sticky="e", padx=5, pady=5)
+        self.login_password_entry = ttk.Entry(frame, width=30, show="*")
+        self.login_password_entry.grid(row=row, column=1, padx=5, pady=5, sticky="w")
+
+        row += 1
+        btn_login = ttk.Button(frame, text="Login", command=self.login_account)
+        btn_login.grid(row=row, column=0, columnspan=2, pady=15)
+
+        row += 1
+        btn_go_to_create = ttk.Button(frame, text="Create New Account", command=self.go_to_create_account)
+        btn_go_to_create.grid(row=row, column=0, columnspan=2)
+
+        row += 1
+        self.login_status_label = ttk.Label(frame, text="", foreground="grey")
+        self.login_status_label.grid(row=row, column=0, columnspan=2, pady=5)
+
+    def go_to_create_account(self):
+        self.login_frame.pack_forget()
+        self.account_frame.pack(fill="both", expand=True)
+
+    def go_to_login(self):
+        self.account_frame.pack_forget()
+        self.login_frame.pack(fill="both", expand=True)
+
+    # ---------- helper to switch from account → main tabs ---------- #
+    def show_main_view(self):
+        if self._main_view_shown:
+            return
+        self._main_view_shown = True
+
+        # Hide the login and account forms
+        self.login_frame.pack_forget()
+        self.account_frame.pack_forget()
+
+        # Show top bar (logout) and the notebook with the money stuff
+        self.top_bar.pack(fill="x")
+        self.notebook.pack(fill="both", expand=True)
+
+    def logout(self):
+        """Log out the current user and return to the login screen."""
+        # Clear current user state
+        self.current_user_id = None
+        self.current_finances_id = None
+        self._main_view_shown = False
+
+        # Hide main app views
+        self.notebook.pack_forget()
+        self.top_bar.pack_forget()
+
+        # Clear tables
+        for item in self.tree_expenses.get_children():
+            self.tree_expenses.delete(item)
+        for item in self.tree_debts.get_children():
+            self.tree_debts.delete(item)
+        for item in self.tree_investments.get_children():
+            self.tree_investments.delete(item)
+
+        # Clear login and account fields
+        self.login_email_entry.delete(0, tk.END)
+        self.login_password_entry.delete(0, tk.END)
+
+        self.entry_name.delete(0, tk.END)
+        self.entry_email.delete(0, tk.END)
+        self.entry_password.delete(0, tk.END)
+        self.entry_income.delete(0, tk.END)
+        self.entry_goal_budget.delete(0, tk.END)
+        self.entry_bank_balance.delete(0, tk.END)
+
+        self.label_status.config(text="No account loaded.")
+        self.login_status_label.config(text="")
+
+        # Return to login screen
+        self.login_frame.pack(fill="both", expand=True)
+
+    # ---------- Account page (now a separate screen, not a tab) ---- #
     def _build_account_tab(self):
-        frame = self.frame_account
+        frame = self.account_frame
 
         row = 0
         ttk.Label(frame, text="Name:").grid(row=row, column=0, sticky="e", padx=5, pady=5)
@@ -96,6 +199,7 @@ class FinanceTrackerGUI(tk.Tk):
         self.label_status = ttk.Label(frame, text="No account loaded.", foreground="grey")
         self.label_status.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky="w")
 
+    # ---------- Expenses tab --------------------------------------- #
     def _build_expenses_tab(self):
         frame = self.frame_expenses
 
@@ -147,6 +251,7 @@ class FinanceTrackerGUI(tk.Tk):
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
 
+    # ---------- Debts tab ------------------------------------------ #
     def _build_debts_tab(self):
         frame = self.frame_debts
 
@@ -195,6 +300,7 @@ class FinanceTrackerGUI(tk.Tk):
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
 
+    # ---------- Investments tab ------------------------------------ #
     def _build_investments_tab(self):
         frame = self.frame_investments
 
@@ -227,14 +333,52 @@ class FinanceTrackerGUI(tk.Tk):
         self.tree_investments.heading("name", text="Name")
         self.tree_investments.heading("amount", text="Amount")
         self.tree_investments.heading("risk", text="Risk Level")
-        self.tree_investments.column("name", anchor="center",width=200)
-        self.tree_investments.column("amount", anchor="center",width=120)
-        self.tree_investments.column("risk",anchor="center", width=120)
+        self.tree_investments.column("name", anchor="center", width=200)
+        self.tree_investments.column("amount", anchor="center", width=120)
+        self.tree_investments.column("risk", anchor="center", width=120)
         self.tree_investments.grid(row=row, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
         frame.rowconfigure(row, weight=1)
         frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
+
+    # ---------- Create account / login ------------------------------ #
+    def login_account(self):
+        email = self.login_email_entry.get().strip()
+        password = self.login_password_entry.get().strip()
+
+        if not email or not password:
+            messagebox.showerror("Error", "Email and password are required.")
+            return
+
+        db = SessionLocal()
+        try:
+            user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+            if not user:
+                messagebox.showerror("Error", "User not found.")
+                return
+
+            if not check_password_hash(user.hashed_password, password):
+                messagebox.showerror("Error", "Incorrect password.")
+                return
+
+            finances = db.execute(
+                select(UserFinances).where(UserFinances.user_id == user.id)
+            ).scalar_one_or_none()
+            if not finances:
+                messagebox.showerror("Error", "No finances record found for this user.")
+                return
+
+            self.current_user_id = user.id
+            self.current_finances_id = finances.id
+
+            messagebox.showinfo("Success", "Logged in successfully.")
+            self.reload_all_lists()
+            self.show_main_view()
+        except Exception as e:
+            messagebox.showerror("Database Error", str(e))
+        finally:
+            db.close()
 
     def create_account(self):
         name = self.entry_name.get().strip()
@@ -293,6 +437,7 @@ class FinanceTrackerGUI(tk.Tk):
             self.label_status.config(text=f"Loaded user: {name} ({email})")
             messagebox.showinfo("Success", "Account created successfully.")
             self.reload_all_lists()
+            self.show_main_view()
         except Exception as e:
             db.rollback()
             messagebox.showerror("Database Error", str(e))
@@ -328,11 +473,13 @@ class FinanceTrackerGUI(tk.Tk):
             self.label_status.config(text=f"Loaded user: {user.name} ({user.email})")
             messagebox.showinfo("Success", "Account loaded.")
             self.reload_all_lists()
+            self.show_main_view()
         except Exception as e:
             messagebox.showerror("Database Error", str(e))
         finally:
             db.close()
 
+    # ---------- Guards & CRUD for expenses/debts/investments ------- #
     def ensure_finances_loaded(self):
         if not self.current_finances_id:
             messagebox.showerror("Error", "No account loaded. Create or load an account first.")
