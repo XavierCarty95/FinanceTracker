@@ -1,0 +1,37 @@
+{
+    "demo@example.com": {
+        "email": "demo@example.com",
+        "password": "demo123",
+        "full_name": "John Doe",
+        "birth_date": "1990-01-15",
+        "gender": "Male",
+        "phone": "+1 (555) 123-4567",
+        "bank_name": "First National Bank",
+        "account_number": "1234567890",
+        "routing_number": "021000021",
+        "account_type": "Checking",
+        "balance": 16750.5,
+        "transactions": [
+            {
+                "date": "2025-12-03",
+                "description": "Salary",
+                "amount": 1000.0,
+                "type": "credit",
+                "notes": ""
+            }
+        ]
+    },
+    "shree.shingre@gmail.com": {
+        "email": "shree.shingre@gmail.com",
+        "password": "shree@shree",
+        "full_name": "Shree",
+        "birth_date": "2003-02-02",
+        "gender": "Male",
+        "phone": "12016605217",
+        "bank_name": "Chase",
+        "account_number": "1111111111",
+        "routing_number": "000000000",
+        "account_type": "Checking",
+        "balance": 0.0
+    }
+}
