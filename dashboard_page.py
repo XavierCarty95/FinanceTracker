@@ -2,7 +2,20 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, date
-from database import add_transaction, add_expense, add_debt, add_investment, update_user_budget, load_users
+from database import (
+    add_transaction,
+    add_expense,
+    update_expense,
+    delete_expense,
+    add_debt,
+    update_debt,
+    delete_debt,
+    add_investment,
+    update_investment,
+    delete_investment,
+    update_user_budget,
+    load_users,
+)
 
 # Default categories/budget to keep UI predictable
 DEFAULT_BUDGET = {
@@ -18,17 +31,27 @@ DEFAULT_BUDGET = {
     'other': 100.0
 }
 
-def normalize_category(cat: str) -> str:
-    return cat.strip().lower() if isinstance(cat, str) else ''
+def normalize_category(category: str) -> str:
+    return category.strip().lower() if isinstance(category, str) else ''
 
 def aggregate_expenses(expenses):
-    totals = {}
-    for exp in expenses:
-        cat = normalize_category(exp.get('category', ''))
-        if not cat:
+    totals_by_category = {}
+    for expense in expenses:
+        category = normalize_category(expense.get('category', ''))
+        if not category:
             continue
-        totals[cat] = totals.get(cat, 0.0) + float(exp.get('cost', 0.0))
-    return totals
+        totals_by_category[category] = totals_by_category.get(category, 0.0) + float(expense.get('cost', 0.0))
+    return totals_by_category
+
+def collapse_small_slices(totals_by_category, threshold_ratio=0.03):
+    total_amount = sum(totals_by_category.values())
+    if total_amount == 0:
+        return totals_by_category
+    main_categories = {name: amount for name, amount in totals_by_category.items() if amount / total_amount >= threshold_ratio}
+    other_total = sum(amount for name, amount in totals_by_category.items() if name not in main_categories)
+    if other_total > 0:
+        main_categories["other"] = main_categories.get("other", 0) + other_total
+    return main_categories
 
 def get_budget(user):
     # Always return a full set of categories to avoid KeyErrors/empty charts
@@ -318,13 +341,23 @@ def expenses_section(user):
             submitted = st.form_submit_button("Add Expense", type="primary")
 
             if submitted:
-                if not expense_name.strip():
+                name_norm = expense_name.strip()
+                category_norm = expense_category.strip().lower()
+                existing = [
+                    exp for exp in user.get('expenses', [])
+                    if exp.get('name', '').strip().lower() == name_norm.lower()
+                    and exp.get('category', '').strip().lower() == category_norm
+                ]
+
+                if not name_norm:
                     st.error("Please enter an expense name")
                 elif expense_cost <= 0:
                     st.error("Please enter a valid cost")
+                elif existing:
+                    st.error("That expense already exists in this category")
                 else:
                     expense_data = {
-                        'name': expense_name,
+                        'name': name_norm,
                         'category': expense_category,
                         'cost': expense_cost
                     }
@@ -350,6 +383,44 @@ def expenses_section(user):
     if expenses:
         expenses_df = pd.DataFrame(expenses)
         st.dataframe(expenses_df, width="stretch", hide_index=True)
+
+        with st.form("edit_expense_form"):
+            st.markdown("**Edit or Delete Expense**")
+            options = {f"{e['name']} ({e['category']}) - ${e['cost']:.2f}": e for e in expenses}
+            selected_label = st.selectbox("Select expense", list(options.keys()))
+            selected = options[selected_label]
+
+            new_name = st.text_input("Name", value=selected["name"])
+            new_category = st.selectbox("Category", ["groceries", "rent", "utilities", "transportation", "entertainment", "healthcare", "dining out", "shopping", "subscriptions", "other"], index=0)
+            new_cost = st.number_input("Cost ($)", min_value=0.01, value=float(selected["cost"]), step=0.01, format="%.2f")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                update_btn = st.form_submit_button("Update", type="primary")
+            with col_b:
+                delete_btn = st.form_submit_button("Delete", type="secondary")
+
+            if update_btn:
+                updated = {
+                    "name": new_name.strip(),
+                    "category": new_category,
+                    "cost": new_cost
+                }
+                ok, msg = update_expense(st.session_state.current_user, selected["id"], updated)
+                if ok:
+                    st.success("Expense updated")
+                    st.session_state.users_db = load_users()
+                    st.rerun()
+                else:
+                    st.error(msg or "Update failed")
+            elif delete_btn:
+                ok, msg = delete_expense(st.session_state.current_user, selected["id"])
+                if ok:
+                    st.success("Expense deleted")
+                    st.session_state.users_db = load_users()
+                    st.rerun()
+                else:
+                    st.error(msg or "Delete failed")
     else:
         st.info("No expenses added yet. Add your first expense above!")
 
@@ -404,6 +475,46 @@ def debts_section(user):
     if debts:
         debts_df = pd.DataFrame(debts)
         st.dataframe(debts_df, width="stretch", hide_index=True)
+
+        with st.form("edit_debt_form"):
+            st.markdown("**Edit or Delete Debt**")
+            options = {f"{d['name']} - ${d['amount_owed']:.2f}": d for d in debts}
+            selected_label = st.selectbox("Select debt", list(options.keys()))
+            selected = options[selected_label]
+
+            new_name = st.text_input("Name", value=selected["name"])
+            new_amount = st.number_input("Amount Owed ($)", min_value=0.01, value=float(selected["amount_owed"]), step=0.01, format="%.2f")
+            new_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=float(selected["interest_rate"]), step=0.01, format="%.2f")
+            new_monthly = st.number_input("Monthly Payment ($)", min_value=0.01, value=float(selected["monthly_pay"]), step=0.01, format="%.2f")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                update_btn = st.form_submit_button("Update", type="primary")
+            with col_b:
+                delete_btn = st.form_submit_button("Delete", type="secondary")
+
+            if update_btn:
+                updated = {
+                    "name": new_name.strip(),
+                    "amount_owed": new_amount,
+                    "interest_rate": new_rate,
+                    "monthly_pay": new_monthly
+                }
+                ok, msg = update_debt(st.session_state.current_user, selected["id"], updated)
+                if ok:
+                    st.success("Debt updated")
+                    st.session_state.users_db = load_users()
+                    st.rerun()
+                else:
+                    st.error(msg or "Update failed")
+            elif delete_btn:
+                ok, msg = delete_debt(st.session_state.current_user, selected["id"])
+                if ok:
+                    st.success("Debt deleted")
+                    st.session_state.users_db = load_users()
+                    st.rerun()
+                else:
+                    st.error(msg or "Delete failed")
     else:
         st.info("No debts added yet. Add your first debt above!")
 
@@ -458,6 +569,44 @@ def investments_section(user):
     if investments:
         investments_df = pd.DataFrame(investments)
         st.dataframe(investments_df, width="stretch", hide_index=True)
+
+        with st.form("edit_investment_form"):
+            st.markdown("**Edit or Delete Investment**")
+            options = {f"{i['name']} - ${i['amount']:.2f}": i for i in investments}
+            selected_label = st.selectbox("Select investment", list(options.keys()))
+            selected = options[selected_label]
+
+            new_name = st.text_input("Name", value=selected["name"])
+            new_amount = st.number_input("Amount ($)", min_value=0.01, value=float(selected["amount"]), step=0.01, format="%.2f")
+            new_risk = st.text_input("Risk Level", value=selected["risk_level"])
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                update_btn = st.form_submit_button("Update", type="primary")
+            with col_b:
+                delete_btn = st.form_submit_button("Delete", type="secondary")
+
+            if update_btn:
+                updated = {
+                    "name": new_name.strip(),
+                    "amount": new_amount,
+                    "risk_level": new_risk.strip()
+                }
+                ok, msg = update_investment(st.session_state.current_user, selected["id"], updated)
+                if ok:
+                    st.success("Investment updated")
+                    st.session_state.users_db = load_users()
+                    st.rerun()
+                else:
+                    st.error(msg or "Update failed")
+            elif delete_btn:
+                ok, msg = delete_investment(st.session_state.current_user, selected["id"])
+                if ok:
+                    st.success("Investment deleted")
+                    st.session_state.users_db = load_users()
+                    st.rerun()
+                else:
+                    st.error(msg or "Delete failed")
     else:
         st.info("No investments added yet. Add your first investment above!")
 
@@ -519,7 +668,9 @@ def budget_section(user):
 
     st.subheader("Expense Breakdown (Donut Chart)")
     # Build totals directly from expenses so the chart works even if budget categories are unset
-    chart_items = [(cat, total) for cat, total in expense_totals.items() if total > 0]
+    # Collapse tiny slices into "Other" to keep labels readable
+    collapsed = collapse_small_slices(expense_totals)
+    chart_items = [(cat, total) for cat, total in collapsed.items() if total > 0]
     labels = [cat.capitalize() for cat, _ in chart_items]
     values = [total for _, total in chart_items]
 
@@ -534,8 +685,17 @@ def budget_section(user):
 
         fig, ax = plt.subplots(figsize=(6, 6))
         colors = plt.cm.Paired.colors[:len(values)] if values else []
-        ax.pie(values, labels=labels, autopct=format_pct, startangle=90, wedgeprops={'width': 0.3}, colors=colors)
-        ax.axis('equal')
+        ax.pie(
+            values,
+            labels=labels,
+            autopct=format_pct,
+            startangle=90,
+            wedgeprops={'width': 0.35, 'edgecolor': 'white', 'linewidth': 1},
+            colors=colors,
+            pctdistance=0.75,
+            labeldistance=1.1
+        )
+        ax.set(aspect='equal')
         st.pyplot(fig)
     else:
         st.info("No expenses recorded yet.")

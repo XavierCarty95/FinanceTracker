@@ -1,8 +1,8 @@
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func
 from models import SessionLocal, User, Transaction, Expense, Debt, Investment, create_tables
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func
 import re
 
 def get_db():
@@ -17,9 +17,9 @@ def load_users():
     db = get_db()
     try:
         users = db.query(User).all()
-        users_db = {}
+        users_by_email = {}
         for user in users:
-            user_data = {
+            users_by_email[user.email] = {
                 'password': user.password,
                 'full_name': user.full_name,
                 'birth_date': user.birth_date.strftime('%Y-%m-%d') if user.birth_date else '',
@@ -33,38 +33,45 @@ def load_users():
                 'budget': user.budget or {},
                 'transactions': [
                     {
-                        'date': t.date.strftime('%Y-%m-%d'),
-                        'description': t.description,
-                        'amount': t.amount,
-                        'type': t.type,
-                        'notes': t.notes
-                    } for t in db.query(Transaction).filter(Transaction.user_id == user.id).all()
+                        'id': transaction.id,
+                        'date': transaction.date.strftime('%Y-%m-%d'),
+                        'description': transaction.description,
+                        'amount': transaction.amount,
+                        'type': transaction.type,
+                        'notes': transaction.notes
+                    }
+                    for transaction in db.query(Transaction).filter(Transaction.user_id == user.id).all()
                 ],
                 'expenses': [
                     {
-                        'name': e.name,
-                        'category': e.category,
-                        'cost': e.cost
-                    } for e in db.query(Expense).filter(Expense.user_id == user.id).all()
+                        'id': expense.id,
+                        'name': expense.name,
+                        'category': expense.category,
+                        'cost': expense.cost
+                    }
+                    for expense in db.query(Expense).filter(Expense.user_id == user.id).all()
                 ],
                 'debts': [
                     {
-                        'name': d.name,
-                        'amount_owed': d.amount_owed,
-                        'interest_rate': d.interest_rate,
-                        'monthly_pay': d.monthly_pay
-                    } for d in db.query(Debt).filter(Debt.user_id == user.id).all()
+                        'id': debt.id,
+                        'name': debt.name,
+                        'amount_owed': debt.amount_owed,
+                        'interest_rate': debt.interest_rate,
+                        'monthly_pay': debt.monthly_pay
+                    }
+                    for debt in db.query(Debt).filter(Debt.user_id == user.id).all()
                 ],
                 'investments': [
                     {
-                        'name': i.name,
-                        'amount': i.amount,
-                        'risk_level': i.risk_level
-                    } for i in db.query(Investment).filter(Investment.user_id == user.id).all()
+                        'id': investment.id,
+                        'name': investment.name,
+                        'amount': investment.amount,
+                        'risk_level': investment.risk_level
+                    }
+                    for investment in db.query(Investment).filter(Investment.user_id == user.id).all()
                 ]
             }
-            users_db[user.email] = user_data
-        return users_db
+        return users_by_email
     finally:
         db.close()
 
@@ -157,16 +164,64 @@ def add_expense(email, expense_data, users_db=None):
         if existing:
             return False, "Expense already exists"
 
-        exp = Expense(
+        expense = Expense(
             user_id=user.id,
             name=expense_data['name'],
             category=expense_data['category'],
             cost=expense_data['cost']
         )
-        db.add(exp)
+        db.add(expense)
         db.commit()
         return True, None
     except Exception as e:
+        db.rollback()
+        return False, "Database error"
+    finally:
+        db.close()
+
+def update_expense(email, expense_id, expense_data):
+    db = get_db()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False, "User not found"
+        expense = db.query(Expense).filter(Expense.id == expense_id, Expense.user_id == user.id).first()
+        if not expense:
+            return False, "Expense not found"
+        name = expense_data['name'].strip()
+        category = expense_data['category'].strip().lower()
+        dup = db.query(Expense).filter(
+            Expense.user_id == user.id,
+            func.lower(Expense.name) == func.lower(name),
+            func.lower(Expense.category) == func.lower(category),
+            Expense.id != expense_id
+        ).first()
+        if dup:
+            return False, "Duplicate expense in this category"
+        expense.name = name
+        expense.category = expense_data['category']
+        expense.cost = expense_data['cost']
+        db.commit()
+        return True, None
+    except Exception:
+        db.rollback()
+        return False, "Database error"
+    finally:
+        db.close()
+
+def delete_expense(email, expense_id):
+    db = get_db()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False, "User not found"
+        expense = db.query(Expense).filter(Expense.id == expense_id, Expense.user_id == user.id).first()
+        if not expense:
+            return False, "Expense not found"
+        db.delete(expense)
+        db.commit()
+        return True, None
+    except Exception:
         db.rollback()
         return False, "Database error"
     finally:
@@ -195,6 +250,45 @@ def add_debt(email, debt_data, users_db=None):
     finally:
         db.close()
 
+def update_debt(email, debt_id, debt_data):
+    db = get_db()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False, "User not found"
+        debt = db.query(Debt).filter(Debt.id == debt_id, Debt.user_id == user.id).first()
+        if not debt:
+            return False, "Debt not found"
+        debt.name = debt_data['name']
+        debt.amount_owed = debt_data['amount_owed']
+        debt.interest_rate = debt_data['interest_rate']
+        debt.monthly_pay = debt_data['monthly_pay']
+        db.commit()
+        return True, None
+    except Exception:
+        db.rollback()
+        return False, "Database error"
+    finally:
+        db.close()
+
+def delete_debt(email, debt_id):
+    db = get_db()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False, "User not found"
+        debt = db.query(Debt).filter(Debt.id == debt_id, Debt.user_id == user.id).first()
+        if not debt:
+            return False, "Debt not found"
+        db.delete(debt)
+        db.commit()
+        return True, None
+    except Exception:
+        db.rollback()
+        return False, "Database error"
+    finally:
+        db.close()
+
 # Add investment to user account
 def add_investment(email, investment_data, users_db=None):
     db = get_db()
@@ -214,6 +308,44 @@ def add_investment(email, investment_data, users_db=None):
     except Exception as e:
         db.rollback()
         return False
+    finally:
+        db.close()
+
+def update_investment(email, investment_id, investment_data):
+    db = get_db()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False, "User not found"
+        investment = db.query(Investment).filter(Investment.id == investment_id, Investment.user_id == user.id).first()
+        if not investment:
+            return False, "Investment not found"
+        investment.name = investment_data['name']
+        investment.amount = investment_data['amount']
+        investment.risk_level = investment_data['risk_level']
+        db.commit()
+        return True, None
+    except Exception:
+        db.rollback()
+        return False, "Database error"
+    finally:
+        db.close()
+
+def delete_investment(email, investment_id):
+    db = get_db()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False, "User not found"
+        investment = db.query(Investment).filter(Investment.id == investment_id, Investment.user_id == user.id).first()
+        if not investment:
+            return False, "Investment not found"
+        db.delete(investment)
+        db.commit()
+        return True, None
+    except Exception:
+        db.rollback()
+        return False, "Database error"
     finally:
         db.close()
 
