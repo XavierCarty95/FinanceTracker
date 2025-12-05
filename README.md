@@ -26,7 +26,7 @@ FinanceTracker is a Streamlit-based personal finance dashboard. It supports sign
 ## Setup & Run
 1) Clone and enter the project  
 ```bash
-git clone <repo-url>
+git clone https://github.com/XavierCarty95/FinanceTracker.git
 cd FinanceTracker
 ```
 
