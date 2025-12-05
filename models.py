@@ -4,9 +4,16 @@ from sqlalchemy.orm import sessionmaker
 from enum import Enum
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/financetracker")
+# Prefer DATABASE_URL if provided; otherwise fall back to a local SQLite file for easy setup.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'financetracker.db')}"
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -38,7 +45,7 @@ class User(Base):
     pay_rate = Column(SAEnum(PayRate), default=PayRate.monthly)
     goal_budget = Column(Float, default=0.0)
     income = Column(Float, default=0.0)
-    budget = Column(JSON, default={})
+    budget = Column(JSON, default=dict)
 
 class Transaction(Base):
     __tablename__ = "transactions"

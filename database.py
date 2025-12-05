@@ -2,6 +2,7 @@ from sqlalchemy.orm import sessionmaker
 from models import SessionLocal, User, Transaction, Expense, Debt, Investment, create_tables
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import func
 import re
 
 def get_db():
@@ -143,7 +144,19 @@ def add_expense(email, expense_data, users_db=None):
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:
-            return False
+            return False, "User not found"
+
+        name = expense_data['name'].strip()
+        category = expense_data['category'].strip().lower()
+        # Prevent duplicate expense entries for the same user/category/name (case-insensitive)
+        existing = db.query(Expense).filter(
+            Expense.user_id == user.id,
+            func.lower(Expense.name) == func.lower(name),
+            func.lower(Expense.category) == func.lower(category)
+        ).first()
+        if existing:
+            return False, "Expense already exists"
+
         exp = Expense(
             user_id=user.id,
             name=expense_data['name'],
@@ -152,10 +165,10 @@ def add_expense(email, expense_data, users_db=None):
         )
         db.add(exp)
         db.commit()
-        return True
+        return True, None
     except Exception as e:
         db.rollback()
-        return False
+        return False, "Database error"
     finally:
         db.close()
 

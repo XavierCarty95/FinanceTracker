@@ -4,6 +4,39 @@ import matplotlib.pyplot as plt
 from datetime import datetime, date
 from database import add_transaction, add_expense, add_debt, add_investment, update_user_budget, load_users
 
+# Default categories/budget to keep UI predictable
+DEFAULT_BUDGET = {
+    'groceries': 400.0,
+    'rent': 1200.0,
+    'utilities': 200.0,
+    'transportation': 300.0,
+    'entertainment': 150.0,
+    'healthcare': 100.0,
+    'dining out': 200.0,
+    'shopping': 150.0,
+    'subscriptions': 50.0,
+    'other': 100.0
+}
+
+def normalize_category(cat: str) -> str:
+    return cat.strip().lower() if isinstance(cat, str) else ''
+
+def aggregate_expenses(expenses):
+    totals = {}
+    for exp in expenses:
+        cat = normalize_category(exp.get('category', ''))
+        if not cat:
+            continue
+        totals[cat] = totals.get(cat, 0.0) + float(exp.get('cost', 0.0))
+    return totals
+
+def get_budget(user):
+    # Always return a full set of categories to avoid KeyErrors/empty charts
+    budget = user.get('budget') or {}
+    merged = {**DEFAULT_BUDGET, **budget}
+    # Ensure numeric values
+    return {k: float(v) for k, v in merged.items()}
+
 def logout():
     st.session_state.logged_in = False
     st.session_state.current_user = None
@@ -188,28 +221,29 @@ def analysis_section(user):
     st.write("")
     st.subheader("Budget Overview")
 
-    budget = user.get('budget', {})
+    budget = get_budget(user)
     expenses = user.get('expenses', [])
-    actual_by_cat = {}
-    for cat in budget.keys():
-        actual_by_cat[cat] = sum(exp['cost'] for exp in expenses if exp['category'] == cat)
+    expense_totals = aggregate_expenses(expenses)
+
+    categories = sorted(set(list(budget.keys()) + list(expense_totals.keys())))
+    actual_by_cat = {cat: expense_totals.get(cat, 0.0) for cat in categories}
 
     budget_actual_data = []
-    for cat in budget.keys():
-        budget_actual_data.append({'Category': f"{cat.capitalize()} Budget", 'Amount': budget[cat]})
+    for cat in categories:
+        budget_actual_data.append({'Category': f"{cat.capitalize()} Budget", 'Amount': budget.get(cat, 0.0)})
         budget_actual_data.append({'Category': f"{cat.capitalize()} Actual", 'Amount': actual_by_cat[cat]})
 
-    budget_actual_df = pd.DataFrame(budget_actual_data)
-    st.bar_chart(budget_actual_df.set_index('Category'))
+    if budget_actual_data:
+        budget_actual_df = pd.DataFrame(budget_actual_data)
+        st.bar_chart(budget_actual_df.set_index('Category'))
+    else:
+        st.info("No budget or expenses available yet.")
 
     st.write("")
     st.write("")
 
     expenses = user.get('expenses', [])
-    actual_by_cat = {}
-    categories_list = ['groceries', 'rent', 'utilities', 'transportation', 'entertainment', 'healthcare', 'dining out', 'shopping', 'subscriptions', 'other']
-    for cat in categories_list:
-        actual_by_cat[cat] = sum(exp['cost'] for exp in expenses if exp['category'] == cat)
+    actual_by_cat = {cat: expense_totals.get(cat, 0.0) for cat in categories}
 
     col_chart1, col_chart2 = st.columns(2)
 
@@ -295,13 +329,14 @@ def expenses_section(user):
                         'cost': expense_cost
                     }
 
-                    if add_expense(st.session_state.current_user, expense_data, st.session_state.users_db):
+                    success, message = add_expense(st.session_state.current_user, expense_data, st.session_state.users_db)
+                    if success:
                         st.success("Expense added successfully!")
                         st.balloons()
                         st.session_state.users_db = load_users()
                         st.rerun()
                     else:
-                        st.error("Failed to add expense")
+                        st.error(message or "Failed to add expense")
 
     with col2:
         st.subheader("Expense Summary")
@@ -431,7 +466,7 @@ def budget_section(user):
     st.write("Set your monthly budget goals by category")
     st.write("")
 
-    budget = user.get('budget', {'basic': 1000.0, 'luxury': 500.0})
+    budget = get_budget(user)
 
     col1, col2 = st.columns(2)
 
@@ -439,7 +474,7 @@ def budget_section(user):
         with st.form("budget_form"):
             st.subheader("Set Monthly Budgets")
 
-            categories = ['groceries', 'rent', 'utilities', 'transportation', 'entertainment', 'healthcare', 'dining out', 'shopping', 'subscriptions', 'other']
+            categories = sorted(budget.keys())
             budget_inputs = {}
 
             for cat in categories:
@@ -466,9 +501,9 @@ def budget_section(user):
     st.subheader("Budget vs Actual")
 
     expenses = user.get('expenses', [])
-    actual_by_cat = {}
-    for cat in budget.keys():
-        actual_by_cat[cat] = sum(exp['cost'] for exp in expenses if exp['category'] == cat)
+    expense_totals = aggregate_expenses(expenses)
+    categories = sorted(set(list(budget.keys()) + list(expense_totals.keys())))
+    actual_by_cat = {cat: expense_totals.get(cat, 0.0) for cat in categories}
 
     if any(v > 0 for v in actual_by_cat.values()):
         expense_df = pd.DataFrame({
@@ -483,12 +518,23 @@ def budget_section(user):
     st.write("")
 
     st.subheader("Expense Breakdown (Donut Chart)")
-    if any(v >= 0.01 for v in actual_by_cat.values()):
-        labels = [cat.capitalize() for cat in actual_by_cat.keys() if actual_by_cat[cat] >= 0.01]
-        values = [actual_by_cat[cat] for cat in actual_by_cat.keys() if actual_by_cat[cat] >= 0.01]
+    # Build totals directly from expenses so the chart works even if budget categories are unset
+    chart_items = [(cat, total) for cat, total in expense_totals.items() if total > 0]
+    labels = [cat.capitalize() for cat, _ in chart_items]
+    values = [total for _, total in chart_items]
+
+    if values:
+        total = sum(values)
+
+        def format_pct(pct):
+            # Show percentages only; keep tiny slices visible
+            if pct < 0.01 and total > 0:
+                return "<0.01%"
+            return f"{pct:.2f}%"
+
         fig, ax = plt.subplots(figsize=(6, 6))
         colors = plt.cm.Paired.colors[:len(values)] if values else []
-        ax.pie(values, labels=labels, autopct='%1.2f%%', startangle=90, wedgeprops={'width': 0.3}, colors=colors)
+        ax.pie(values, labels=labels, autopct=format_pct, startangle=90, wedgeprops={'width': 0.3}, colors=colors)
         ax.axis('equal')
         st.pyplot(fig)
     else:
@@ -499,8 +545,8 @@ def budget_section(user):
 
     st.subheader("Budget vs Actual")
     cols = st.columns(2)
-    for i, cat in enumerate(budget.keys()):
+    for i, cat in enumerate(categories):
         with cols[i % 2]:
-            budgeted = budget[cat]
-            actual = actual_by_cat[cat]
+            budgeted = budget.get(cat, 0.0)
+            actual = actual_by_cat.get(cat, 0.0)
             st.metric(f"{cat.capitalize()} Budget", f"${budgeted:,.2f}", delta=f"{actual - budgeted:,.2f}")

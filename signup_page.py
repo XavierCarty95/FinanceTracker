@@ -1,5 +1,5 @@
 import streamlit as st
-from database import validate_email, signup_user
+from database import validate_email, signup_user, load_users
 
 def show_signup_page():
     st.title("Create New Account")
@@ -134,6 +134,9 @@ def show_signup_page():
                     }  # Default monthly budget
                 }
                 
-                signup_user(user_data, st.session_state.users_db)
-                st.session_state.signup_success = True
-                st.rerun()
+                if signup_user(user_data, st.session_state.users_db):
+                    st.session_state.users_db = load_users()
+                    st.session_state.signup_success = True
+                    st.rerun()
+                else:
+                    st.error("Unable to create account. Please try again.")
