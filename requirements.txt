@@ -1,4 +1,7 @@
-flask
-python-dotenv
+streamlit
+pandas
+matplotlib
 sqlalchemy
 psycopg2-binary
+werkzeug
+python-dotenv

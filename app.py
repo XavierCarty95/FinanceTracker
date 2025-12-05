@@ -3,9 +3,15 @@ from database import load_users
 from login_page import show_login_page
 from signup_page import show_signup_page
 from dashboard_page import show_dashboard_page
+from models import create_tables
+from dotenv import load_dotenv
+
+load_dotenv()
+
+create_tables()
 
 # Page configuration
-st.set_page_config(page_title="MyBank", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="MyBank", layout="wide")
 
 # Initialize session state
 if 'logged_in' not in st.session_state:
