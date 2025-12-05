@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Onboarding - Investments</h2>
+<form method="post">
+  <label>Name: <input type="text" name="name"></label>
+  <label>Amount: <input type="number" step="0.01" name="amount"></label>
+  <label>Risk Level: <input type="text" name="risk_level"></label>
+  <button type="submit">Add Investment</button>
+</form>
+
+<h3>Current Investments</h3>
+<ul>
+{% for i in investments %}
+  <li>{{ i.name }} - {{ i.amount }} ({{ i.risk_level }})</li>
+{% endfor %}
+</ul>
+
+<a href="{{ url_for('dashboard.home') }}">Go to Dashboard</a>
+{% endblock %}

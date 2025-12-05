@@ -2,13 +2,13 @@ import streamlit as st
 from database import validate_email, signup_user
 
 def show_signup_page():
-    st.title("Create New Account")
+    st.title("🏦 Create New Account")
     st.markdown("Join MyBank today and experience secure banking")
     st.write("")
     
     # Check if signup was successful
     if st.session_state.signup_success:
-        st.success("Account created successfully!")
+        st.success("✅ Account created successfully!")
         st.balloons()
         st.info("Please login with your credentials")
         
@@ -20,7 +20,7 @@ def show_signup_page():
     
     with st.form("signup_form"):
         # Personal Information
-        st.subheader("Personal Information")
+        st.subheader("📋 Personal Information")
         col1, col2 = st.columns(2)
         
         with col1:
@@ -40,7 +40,7 @@ def show_signup_page():
         st.write("")
         
         # Bank Account Details
-        st.subheader("Bank Account Details")
+        st.subheader("🏦 Bank Account Details")
         col3, col4 = st.columns(2)
         
         with col3:
@@ -51,8 +51,6 @@ def show_signup_page():
             routing_number = st.text_input("Routing Number *", placeholder="021000021")
             account_type = st.selectbox("Account Type *", ["Checking", "Savings"])
         
-        st.write("")
-        bank_balance = st.number_input("Initial Balance ($)", min_value=0.0, value=1000.0, step=100.0)
         st.write("")
         st.write("")
         
@@ -115,23 +113,8 @@ def show_signup_page():
                     'account_number': account_number,
                     'routing_number': routing_number,
                     'account_type': account_type,
-                    'balance': bank_balance,  # Initial balance
-                    'transactions': [],  # Empty transaction list
-                    'expenses': [],
-                    'debts': [],
-                    'investments': [],
-                    'budget': {
-                        'groceries': 400.0,
-                        'rent': 1200.0,
-                        'utilities': 200.0,
-                        'transportation': 300.0,
-                        'entertainment': 150.0,
-                        'healthcare': 100.0,
-                        'dining out': 200.0,
-                        'shopping': 150.0,
-                        'subscriptions': 50.0,
-                        'other': 100.0
-                    }  # Default monthly budget
+                    'balance': 0.00,  # Initial balance
+                    'transactions': []  # Empty transaction list
                 }
                 
                 signup_user(user_data, st.session_state.users_db)

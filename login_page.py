@@ -2,7 +2,7 @@ import streamlit as st
 from database import login_user
 
 def show_login_page():
-    st.markdown("<h1 style='text-align: center;'>MyBank</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🏦 MyBank</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: gray;'>Secure Banking at Your Fingertips</h3>", unsafe_allow_html=True)
     st.write("")
     st.write("")
@@ -26,12 +26,10 @@ def show_login_page():
                     st.session_state.logged_in = True
                     st.session_state.current_user = email
                     st.session_state.page = 'dashboard'
-                    from database import load_users
-                    st.session_state.users_db = load_users()
-                    st.success("Login successful!")
+                    st.success("✅ Login successful!")
                     st.rerun()
                 else:
-                    st.error("Invalid email or password")
+                    st.error("❌ Invalid email or password")
         
         st.write("")
         st.markdown("---")
@@ -46,5 +44,5 @@ def show_login_page():
                 st.rerun()
         
         # Demo credentials
-        with st.expander("Demo Credentials"):
+        with st.expander("🔍 Demo Credentials"):
             st.code("Email: demo@example.com\nPassword: demo123")
